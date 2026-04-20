@@ -4,11 +4,20 @@
 @push('vela-page-editor-blocks')
 <script>
 (function() {
-    if (typeof PageEditor === 'undefined' || typeof PageEditor.registerBlockType !== 'function') return;
-
+    // The vela-page-editor-blocks stack emits ABOVE the scripts stack where
+    // page-editor.js loads, so PageEditor isn't defined yet when this runs.
+    // Defer registration until DOM is ready (all synchronous scripts have
+    // executed by then, including page-editor.js).
     var SNIPPETS = @json($__snippets ?? []);
 
-    PageEditor.registerBlockType('snippet', {
+    function register() {
+        if (typeof PageEditor === 'undefined' || typeof PageEditor.registerBlockType !== 'function') return false;
+        PageEditor.registerBlockType('snippet', blockConfig());
+        return true;
+    }
+
+    function blockConfig() {
+        return {
         icon: 'fa-code',
         label: 'Snippet',
         defaults: { content: { snippet_id: null }, settings: {} },
@@ -69,7 +78,17 @@
                 settings: block.settings
             };
         }
-    });
+        };
+    }
+
+    // Try now (in case PageEditor already loaded), else wait for DOM ready.
+    if (!register()) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', register);
+        } else {
+            register();
+        }
+    }
 
     function escHtml(s) {
         return String(s == null ? '' : s)
