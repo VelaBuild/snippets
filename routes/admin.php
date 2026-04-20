@@ -10,7 +10,11 @@ Route::prefix('admin/snippets')->name('vela.admin.snippets.')->group(function ()
     Route::get('/{snippet}/edit', [SnippetController::class, 'edit'])->name('edit');
     Route::put('/{snippet}',      [SnippetController::class, 'update'])->name('update');
     Route::delete('/{snippet}',   [SnippetController::class, 'destroy'])->name('destroy');
-    Route::get('/{snippet}/preview', [SnippetController::class, 'preview'])->name('preview');
+    // Snippets have no standalone view page — the edit form has a live
+    // preview iframe that does the same job inside the editing flow.
+    // Redirect any legacy /view or /preview URLs straight to edit.
+    Route::get('/{snippet}/preview', fn($snippet) => redirect()->route('vela.admin.snippets.edit', $snippet));
+    Route::get('/{snippet}',         fn($snippet) => redirect()->route('vela.admin.snippets.edit', $snippet));
     Route::post('/preview-live',  [SnippetController::class, 'previewLive'])->name('preview-live');
     Route::get('/picker/list',    [SnippetController::class, 'pickerList'])->name('picker-list');
 });

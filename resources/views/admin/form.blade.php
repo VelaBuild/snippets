@@ -57,9 +57,6 @@
 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-success">{{ $snippet->exists ? 'Save' : 'Create snippet' }}</button>
-                    @if($snippet->exists)
-                        <a href="{{ route('vela.admin.snippets.preview', $snippet) }}" target="_blank" class="btn btn-secondary">Open preview in new tab</a>
-                    @endif
                 </div>
             </div>
         </div>

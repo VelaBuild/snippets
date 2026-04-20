@@ -54,7 +54,14 @@
                 <tbody>
                     @foreach($snippets as $s)
                     <tr>
-                        <td><strong>{{ $s->name }}</strong><br><code style="font-size: 11px; color: var(--v-fg-subtle);">{{ $s->slug }}</code></td>
+                        <td>
+                            @can('snippets_edit')
+                                <a href="{{ route('vela.admin.snippets.edit', $s) }}" style="color: inherit; text-decoration: none;"><strong>{{ $s->name }}</strong></a>
+                            @else
+                                <strong>{{ $s->name }}</strong>
+                            @endcan
+                            <br><code style="font-size: 11px; color: var(--v-fg-subtle);">{{ $s->slug }}</code>
+                        </td>
                         <td><span class="badge badge-secondary">{{ $s->category }}</span></td>
                         <td>{{ \Illuminate\Support\Str::limit($s->description, 80) }}</td>
                         <td>
@@ -66,7 +73,6 @@
                         </td>
                         <td>{{ $s->uses_count }}</td>
                         <td>
-                            <a href="{{ route('vela.admin.snippets.preview', $s) }}" target="_blank" class="btn btn-sm btn-secondary">Preview</a>
                             @can('snippets_edit')
                                 <a href="{{ route('vela.admin.snippets.edit', $s) }}" class="btn btn-sm btn-primary">Edit</a>
                             @endcan

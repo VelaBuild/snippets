@@ -74,20 +74,6 @@ class SnippetController extends Controller
     }
 
     /**
-     * Iframe-safe preview. Emits only the snippet's HTML/CSS/JS plus a
-     * minimal reset so the author sees the snippet alone without admin
-     * chrome bleeding in.
-     */
-    public function preview(Snippet $snippet)
-    {
-        abort_if(Gate::denies('snippets_access'), 403);
-        return response()
-            ->view('vela-snippets::admin.preview', compact('snippet'))
-            ->header('X-Frame-Options', 'SAMEORIGIN')
-            ->header('Content-Security-Policy', "frame-ancestors 'self'");
-    }
-
-    /**
      * Live preview of unsaved content. POST body = {html, css, js, scope_css}.
      * Used by the edit form's preview pane so devs see changes without saving.
      */

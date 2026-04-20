@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $snippet->name ?: 'Snippet preview' }}</title>
     <style>
-        /* Minimal reset + page chrome for the preview iframe. Intentionally
-           plain so the snippet's own styling is the only visual identity. */
+        /* Minimal iframe chrome for the edit-form live preview pane. Not a
+           user-facing page — served by the previewLive endpoint into the
+           <iframe> on /admin/snippets/{id}/edit. Kept intentionally plain
+           so the snippet's own styles are the only visual identity. */
         * { box-sizing: border-box; }
         html, body { margin: 0; padding: 0; }
         body {
@@ -15,17 +17,9 @@
             padding: 24px;
             line-height: 1.5;
         }
-        .preview-banner {
-            font-family: ui-monospace, Menlo, monospace;
-            font-size: 11px; color: #6B7388;
-            letter-spacing: 0.08em; text-transform: uppercase;
-            margin-bottom: 16px;
-            padding-bottom: 12px; border-bottom: 1px dashed #DCE0E9;
-        }
     </style>
 </head>
 <body>
-    <div class="preview-banner">Snippet preview · {{ $snippet->name ?: 'untitled' }}</div>
     {!! $snippet->render() !!}
 </body>
 </html>
