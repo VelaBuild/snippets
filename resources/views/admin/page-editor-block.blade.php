@@ -1,6 +1,34 @@
-{{-- Register the `snippet` block type on the client-side PageEditor.
-     The vela-page-editor-blocks stack emits AFTER core's page-editor.js,
-     so PageEditor is already defined by the time this script runs. --}}
+{{--
+    Client-side Page Builder block registration — reference pattern.
+
+    Core's admin layout has two <script> extension points:
+
+        @stack('scripts')                    ← page-editor.js emits here
+        @stack('vela-page-editor-blocks')    ← plugins emit here (AFTER)
+
+    Because our push lands AFTER page-editor.js has executed, we can call
+    PageEditor.registerBlockType(...) directly — no readiness check, no
+    polling, no race conditions.
+
+    This partial is pushed onto the stack by a view composer registered
+    in SnippetsServiceProvider. The composer fires whenever core's
+    page-editor partial is rendered, so this <script> only ships on
+    admin page-edit screens — not on every admin page.
+
+    The `$__snippets` view data is the current list of active snippets
+    (id / name / slug / category / description). We JSON-encode it into
+    the client-side bundle so the block picker + editor can populate its
+    dropdown without making an extra AJAX call.
+
+    PageEditor.registerBlockType(name, config) expects:
+      icon            FontAwesome class suffix (e.g. 'fa-code')
+      label           Button label in the block picker
+      defaults        Initial { content, settings } for a new instance
+      renderPreview   (block) => string — summary shown in the page editor
+      renderEditor    (block) => string — full form HTML for the modal
+      initEditor      (block) => void  — wire up event listeners
+      collectData     (block) => { content, settings } — reads the form back
+--}}
 @push('vela-page-editor-blocks')
 <script>
 (function() {

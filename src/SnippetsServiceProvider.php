@@ -3,52 +3,90 @@
 namespace VelaBuild\Snippets;
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Vela Snippets plugin — reference implementation.
+ * SnippetsServiceProvider — reference implementation for Vela plugins.
  *
- * This file shows the three things every Vela plugin should do:
+ * Read this file top to bottom. It demonstrates every extension point a
+ * typical plugin touches. The full plugin-authoring guide lives in core
+ * at `docs/plugins.md`; this file is the working example the guide points
+ * to.
  *
- *   1. Load its own migrations, views, routes, and translations.
- *   2. Register an admin menu entry + permissions.
- *   3. If it extends the Page Builder, register a block type via the
- *      BlockRegistry on the Vela facade/singleton.
+ * ─────────────────────────────────────────────────────────────────────
+ * What this plugin adds (for orientation before reading the code)
+ * ─────────────────────────────────────────────────────────────────────
+ *   1. A `vela_snippets` DB table (migration auto-runs)
+ *   2. An admin page at /admin/snippets (CRUD + live preview iframe)
+ *   3. A sidebar menu entry under "Content → Snippets"
+ *   4. A `Snippet` block type in the Page Builder block picker
+ *   5. Four permissions (access/create/edit/delete) wired into vela_permissions
  *
- * No changes to core are required for this plugin to function; everything
- * hooks in via `app(Vela::class)`.
+ * ─────────────────────────────────────────────────────────────────────
+ * Plugin lifecycle — the four things every plugin does
+ * ─────────────────────────────────────────────────────────────────────
+ *   1. loadMigrations / loadViews / route group (middleware-wrapped)
+ *   2. Register with Vela's registries (blocks, menus, templates, …)
+ *   3. Seed permissions into vela_permissions (core's VelaAuthGates
+ *      middleware picks them up on every admin request)
+ *   4. Push a <script> onto the vela-page-editor-blocks stack to hook
+ *      into the admin Page Builder (only needed if you add a block type)
+ *
+ * None of the above requires modifying core. The plugin is a drop-in.
  */
 class SnippetsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Nothing needed here for this plugin. If you have bindings,
+        // do them here (e.g. $this->app->singleton(Foo::class, ...)).
     }
 
     public function boot(): void
     {
-        // 1. Load resources ------------------------------------------------
+        // ─── 1. Load our own resources ────────────────────────────────
+
+        // Migrations: run via `php artisan migrate`. The one file in
+        // database/migrations/ will create vela_snippets.
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        // Views namespace: our views are referenced as
+        // `vela-snippets::admin.index`, `vela-snippets::public.block`, etc.
+        // Keep the namespace unique — don't collide with another plugin.
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'vela-snippets');
 
-        // Routes go through the same middleware stack as core admin routes so
-        // the Vela auth guard, 2FA, and gates all apply. `vela.locale` keeps
-        // the UI in the admin's chosen language.
+        // Admin routes: wrap in the same middleware stack that core uses
+        // for /admin/* (web + vela.auth + vela.2fa + vela.gates). This
+        // ensures the Vela guard resolves, 2FA is enforced, and gates
+        // work. The config key lets a host app override the stack if
+        // they need to (e.g. add rate-limiting).
         Route::group([
             'middleware' => config('vela.middleware.admin', ['web', 'vela.auth', 'vela.2fa', 'vela.gates']),
         ], function () {
             $this->loadRoutesFrom(__DIR__ . '/../routes/admin.php');
         });
 
-        // 2. Register with Vela's registries -------------------------------
+
+        // ─── 2. Hook into Vela's registries ───────────────────────────
+        //
+        // Defer to `booted()` so core's service provider has finished
+        // booting (and the Vela singleton is fully wired) before we try
+        // to resolve it. If core isn't present (someone install this
+        // plugin without core, somehow), we fail silently — our routes
+        // and migrations just stay dormant.
         $this->app->booted(function () {
             try {
                 $vela = $this->app->make(\VelaBuild\Core\Vela::class);
             } catch (\Throwable $e) {
-                return; // Core not available — nothing to register against.
+                return;
             }
 
-            // Admin menu entry under "Content".
+            // Admin sidebar entry. `group` values core uses: 'general',
+            // 'content', 'admin'. `gate` is a permission title that
+            // controls visibility (non-matching users don't see the
+            // menu item or get redirected from its route).
             $vela->registerMenuItem('snippets', [
                 'label' => 'Snippets',
                 'icon'  => 'fas fa-code',
@@ -58,13 +96,21 @@ class SnippetsServiceProvider extends ServiceProvider
                 'gate'  => 'snippets_access',
             ]);
 
-            // Page Builder block type — lets page authors drop a snippet
-            // into any row. `view` = public render; `editor` = admin form.
+            // Page Builder block type. The registry holds the server-side
+            // config; there's also a client-side JS registration below
+            // (step 4) that tells the admin JS how to render the block
+            // picker entry and editor UI.
+            //
+            //   'view'    = public render template
+            //   'editor'  = admin-side form template (rendered inside
+            //               the page editor modal)
+            //   'defaults' = initial content/settings when a user adds a
+            //                fresh instance of this block
             $vela->registerBlock('snippet', [
-                'label' => 'Snippet',
-                'icon'  => 'fas fa-code',
-                'group' => 'content',
-                'view'  => 'vela-snippets::public.block',
+                'label'  => 'Snippet',
+                'icon'   => 'fas fa-code',
+                'group'  => 'content',
+                'view'   => 'vela-snippets::public.block',
                 'editor' => 'vela-snippets::admin.block-form',
                 'defaults' => [
                     'content'  => ['snippet_id' => null],
@@ -73,18 +119,35 @@ class SnippetsServiceProvider extends ServiceProvider
             ]);
         });
 
-        // 3. Permissions ---------------------------------------------------
+
+        // ─── 3. Permissions ───────────────────────────────────────────
         $this->bootPermissions();
 
-        // 4. Page Builder JS registration ---------------------------------
-        // When the page-editor partial renders, render our registration
-        // script — it @pushes itself onto core's `vela-page-editor-blocks`
-        // stack, so core's admin layout emits the <script> inside the page
-        // where PageEditor.registerBlockType is callable.
+
+        // ─── 4. Page Builder JS registration ──────────────────────────
         //
-        // This is the pattern every plugin that adds a Page Builder block
-        // type should follow.
-        \Illuminate\Support\Facades\View::composer(
+        // Why this isn't just `<script>PageEditor.registerBlockType(...)</script>`:
+        //
+        // The admin Page Builder's block picker is driven by the JS
+        // object `PageEditor.blockTypes`, populated by the core script
+        // `vendor/vela/js/page-editor.js` via `PageEditor.registerBlockType(name, cfg)`.
+        // For our block type to appear, we must call that function too.
+        //
+        // Core's admin layout provides an ordered extension point:
+        //   @stack('scripts')                 ← page-editor.js loads here
+        //   @stack('vela-page-editor-blocks') ← our <script> emits AFTER
+        //
+        // By the time our stack emits, `PageEditor` is defined. So a
+        // plain `registerBlockType(...)` call works — no DOMContentLoaded,
+        // no polling.
+        //
+        // We register a view composer on core's block-editor partial so
+        // our push happens inside the same render tree — which keeps the
+        // push state alive until the outer admin layout's @stack fires.
+        //
+        // For plugins that don't add a Page Builder block, you can skip
+        // this step entirely.
+        View::composer(
             'vela::admin.pages.partials.block-editor',
             function () {
                 try {
@@ -93,28 +156,42 @@ class SnippetsServiceProvider extends ServiceProvider
                         ->get(['id', 'name', 'slug', 'category', 'description'])
                         ->toArray();
                 } catch (\Throwable $e) {
+                    // No DB / table missing — ship an empty list so the
+                    // picker still shows "Snippet" with a helpful empty
+                    // state instead of 500-ing.
                     $snippets = [];
                 }
-                // Render once; the view body is wrapped in @push/@endpush.
-                view('vela-snippets::admin.page-editor-block', ['__snippets' => $snippets])->render();
+                // Render our partial. The partial itself is wrapped in
+                // @push('vela-page-editor-blocks') ... @endpush, so just
+                // calling render() is enough — its contents get buffered
+                // onto the stack and the admin layout emits them later.
+                view(
+                    'vela-snippets::admin.page-editor-block',
+                    ['__snippets' => $snippets]
+                )->render();
             }
         );
     }
 
     /**
-     * Seed permission rows into vela_permissions so admins can assign them
-     * to roles. Gates are wired up dynamically by Core's VelaAuthGates
-     * middleware based on the permission→role mapping, so the plugin
-     * doesn't need to call Gate::define() itself.
+     * Seed permission rows into vela_permissions so admins can assign
+     * them to roles via the roles UI. Core's VelaAuthGates middleware
+     * defines the Laravel gates dynamically from the permission→role
+     * mapping on every admin request — so plugins don't need their own
+     * `Gate::define()` calls.
      *
-     * Guarded with Schema::hasTable() so this is safe on no-DB static-cache
-     * deploys where the migration hasn't run.
+     * Guarded with `Schema::hasTable()` + `try/catch` so this is safe on
+     * no-DB static-cache deploys where the migration hasn't run and on
+     * fresh installs where the vela_permissions table doesn't exist yet.
+     *
+     * Run from `booted()` so core's migrations have a chance to run
+     * first if they're part of the same artisan invocation.
      */
     protected function bootPermissions(): void
     {
         $this->app->booted(function () {
             try {
-                if (!\Illuminate\Support\Facades\Schema::hasTable('vela_permissions')) return;
+                if (!Schema::hasTable('vela_permissions')) return;
                 foreach ([
                     'snippets_access' => 'View snippets',
                     'snippets_create' => 'Create snippets',
@@ -127,7 +204,7 @@ class SnippetsServiceProvider extends ServiceProvider
                     );
                 }
             } catch (\Throwable $e) {
-                // DB unavailable — skip silently.
+                // DB unavailable — don't block the boot.
             }
         });
     }

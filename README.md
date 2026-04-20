@@ -2,6 +2,8 @@
 
 **The first official Vela plugin — also the reference implementation for plugin authors.**
 
+> Full plugin-authoring guide: **[velabuild/core `docs/plugins.md`](https://github.com/VelaBuild/core/blob/master/docs/plugins.md)**. That doc walks through every extension point and cites this repo. Read both together — the doc explains the *why*, `src/SnippetsServiceProvider.php` shows the *how* with heavy inline comments.
+
 Adds a **Snippets** page to Vela admin where users, developers, and AI can create reusable chunks of HTML/CSS/JS. Every snippet shows up in the Page Builder as a `Snippet` block: pick one from the dropdown and it's on the page.
 
 ```
