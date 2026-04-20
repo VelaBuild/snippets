@@ -1,23 +1,12 @@
 {{-- Register the `snippet` block type on the client-side PageEditor.
-     Pushed onto the vela-page-editor-blocks stack (declared in core's
-     admin layout) whenever the page-editor partial renders. --}}
+     The vela-page-editor-blocks stack emits AFTER core's page-editor.js,
+     so PageEditor is already defined by the time this script runs. --}}
 @push('vela-page-editor-blocks')
 <script>
 (function() {
-    // The vela-page-editor-blocks stack emits ABOVE the scripts stack where
-    // page-editor.js loads, so PageEditor isn't defined yet when this runs.
-    // Defer registration until DOM is ready (all synchronous scripts have
-    // executed by then, including page-editor.js).
     var SNIPPETS = @json($__snippets ?? []);
 
-    function register() {
-        if (typeof PageEditor === 'undefined' || typeof PageEditor.registerBlockType !== 'function') return false;
-        PageEditor.registerBlockType('snippet', blockConfig());
-        return true;
-    }
-
-    function blockConfig() {
-        return {
+    PageEditor.registerBlockType('snippet', {
         icon: 'fa-code',
         label: 'Snippet',
         defaults: { content: { snippet_id: null }, settings: {} },
@@ -28,8 +17,8 @@
             if (!snip) return '<em class="text-muted">No snippet chosen</em>';
             var desc = snip.description ? ' — ' + snip.description : '';
             return '<div style="padding:10px 14px; border:1px solid #e9ecef; border-radius:6px; background:#fafafa;">'
-                 + '<strong>✂ ' + escHtml(snip.name) + '</strong>'
-                 + '<span style="color:#6B7388; font-size:12px;">' + escHtml(desc) + '</span>'
+                 + '<strong>✂ ' + esc(snip.name) + '</strong>'
+                 + '<span style="color:#6B7388; font-size:12px;">' + esc(desc) + '</span>'
                  + '</div>';
         },
 
@@ -37,17 +26,14 @@
             var selectedId = block.content && block.content.snippet_id ? parseInt(block.content.snippet_id, 10) : 0;
 
             if (!SNIPPETS.length) {
-                return '<div class="alert alert-warning">'
-                     + 'No snippets yet. <a href="' + window.location.origin + window.location.pathname.replace(/\\/admin\\/pages.*/, '/admin/snippets/create') + '" target="_blank">Create one</a> and come back.'
-                     + '</div>';
+                return '<div class="alert alert-warning">No snippets yet. '
+                     + '<a href="/admin/snippets/create" target="_blank">Create one</a> and come back.</div>';
             }
 
-            // Group by category
             var byCat = {};
             SNIPPETS.forEach(function(s) {
                 var c = s.category || 'general';
-                if (!byCat[c]) byCat[c] = [];
-                byCat[c].push(s);
+                (byCat[c] = byCat[c] || []).push(s);
             });
 
             var html = '<div class="form-group">'
@@ -55,17 +41,15 @@
                      + '<select id="snippet-id-select" class="form-control">'
                      + '<option value="">— choose a snippet —</option>';
             Object.keys(byCat).sort().forEach(function(cat) {
-                html += '<optgroup label="' + escHtml(cat) + '">';
+                html += '<optgroup label="' + esc(cat) + '">';
                 byCat[cat].forEach(function(s) {
-                    var sel = s.id === selectedId ? ' selected' : '';
-                    html += '<option value="' + s.id + '"' + sel + '>' + escHtml(s.name) + '</option>';
+                    html += '<option value="' + s.id + '"' + (s.id === selectedId ? ' selected' : '') + '>' + esc(s.name) + '</option>';
                 });
                 html += '</optgroup>';
             });
             html += '</select>';
-            html += '<small class="form-text text-muted">'
-                  + '<a href="/admin/snippets" target="_blank">Manage snippets ↗</a>'
-                  + '</small></div>';
+            html += '<small class="form-text text-muted"><a href="/admin/snippets" target="_blank">Manage snippets ↗</a></small>';
+            html += '</div>';
             return html;
         },
 
@@ -78,19 +62,9 @@
                 settings: block.settings
             };
         }
-        };
-    }
+    });
 
-    // Try now (in case PageEditor already loaded), else wait for DOM ready.
-    if (!register()) {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', register);
-        } else {
-            register();
-        }
-    }
-
-    function escHtml(s) {
+    function esc(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
