@@ -1,0 +1,28 @@
+{
+    "name": "velabuild/snippets",
+    "description": "Reusable HTML/CSS/JS snippets for Vela — admin UI + Page Builder block. First official Vela plugin; reference implementation for plugin authors.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        { "name": "Vela Build", "email": "hello@vela.build" }
+    ],
+    "require": {
+        "php": "^8.2",
+        "velabuild/core": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "VelaBuild\\Snippets\\": "src/",
+            "VelaBuild\\Snippets\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "VelaBuild\\Snippets\\SnippetsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
