@@ -75,6 +75,30 @@ class SnippetsServiceProvider extends ServiceProvider
 
         // 3. Permissions ---------------------------------------------------
         $this->bootPermissions();
+
+        // 4. Page Builder JS registration ---------------------------------
+        // When the page-editor partial renders, render our registration
+        // script — it @pushes itself onto core's `vela-page-editor-blocks`
+        // stack, so core's admin layout emits the <script> inside the page
+        // where PageEditor.registerBlockType is callable.
+        //
+        // This is the pattern every plugin that adds a Page Builder block
+        // type should follow.
+        \Illuminate\Support\Facades\View::composer(
+            'vela::admin.pages.partials.block-editor',
+            function () {
+                try {
+                    $snippets = Models\Snippet::where('is_active', true)
+                        ->orderBy('category')->orderBy('name')
+                        ->get(['id', 'name', 'slug', 'category', 'description'])
+                        ->toArray();
+                } catch (\Throwable $e) {
+                    $snippets = [];
+                }
+                // Render once; the view body is wrapped in @push/@endpush.
+                view('vela-snippets::admin.page-editor-block', ['__snippets' => $snippets])->render();
+            }
+        );
     }
 
     /**
